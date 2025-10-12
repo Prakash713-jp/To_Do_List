@@ -2,6 +2,8 @@
 import React, { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import bgImage from '../assets/y.jpg';
+import api from "../api/axios";
+
 
 const ResetPassword = () => {
   const [form, setForm] = useState({ password: "", confirmPassword: "" });
@@ -9,31 +11,29 @@ const ResetPassword = () => {
   const { token } = useParams();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (form.password !== form.confirmPassword) {
-      alert("Passwords do not match!");
-      return;
-    }
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (form.password !== form.confirmPassword) {
+    alert("Passwords do not match!");
+    return;
+  }
 
-    setLoading(true);
-    try {
-      const res = await fetch("http://localhost:5000/api/reset/reset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, newPassword: form.password }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        alert(data.message || "Password reset successful!");
-        navigate("/login");
-      } else alert(data.message || "Failed to reset password.");
-    } catch (err) {
-      console.error(err);
-      alert("Server error");
-    }
-    setLoading(false);
-  };
+  setLoading(true);
+  try {
+    const res = await api.post("/reset/reset", {
+      token,
+      newPassword: form.password,
+    });
+
+    alert(res.data.message || "Password reset successful!");
+    navigate("/login");
+  } catch (err) {
+    console.error(err);
+    alert(err.response?.data?.message || "Failed to reset password.");
+  }
+  setLoading(false);
+};
+
 
   return (
     <div

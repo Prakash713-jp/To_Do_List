@@ -2,6 +2,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import bgImage from '../assets/y.jpg';
+import api from "../api/axios";
+
 
 const Register = () => {
   const [form, setForm] = useState({ name: "", email: "", password: "" });
@@ -9,28 +11,25 @@ const Register = () => {
   const [successMsg, setSuccessMsg] = useState("");
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const res = await fetch("http://localhost:5000/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSuccessMsg("✅ Registration successful! Redirecting to login...");
-        setTimeout(() => {
-          navigate("/login");
-        }, 2000); // 2s delay before redirect
-      } else alert(data.message || "Registration failed");
-    } catch (err) {
-      console.error(err);
-      alert("Server error");
-    }
-    setLoading(false);
-  };
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  try {
+    const res = await api.post("/auth/register", form);
+    const data = res.data;
+
+    // Show success message and redirect
+    setSuccessMsg("✅ Registration successful! Redirecting to login...");
+    setTimeout(() => {
+      navigate("/login");
+    }, 2000);
+  } catch (err) {
+    console.error(err);
+    alert(err.response?.data?.message || "Registration failed");
+  }
+  setLoading(false);
+};
+
 
   return (
     <div

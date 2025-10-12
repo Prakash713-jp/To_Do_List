@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import "bootstrap/dist/css/bootstrap.min.css";
 import bgImage from '../assets/y.jpg';
+import api from "../api/axios"; // ✅ Add this at the top
 
 
 const Login = () => {
@@ -20,28 +21,20 @@ const Login = () => {
   }, [user, navigate]);
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const res = await fetch("http://localhost:5000/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
+  e.preventDefault();
+  setLoading(true);
+  try {
+    const res = await api.post("/auth/login", form);
+    const data = res.data;
 
-      if (res.ok) {
-        login(data.user, data.token); // ✅ set context + localStorage
-        // redirect handled by useEffect
-      } else {
-        alert(data.message || "Invalid credentials");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Server error");
-    }
-    setLoading(false);
-  };
+    login(data.user, data.token); // ✅ context + localStorage
+    // Redirect handled by useEffect
+  } catch (err) {
+    console.error(err);
+    alert(err.response?.data?.message || "Login failed");
+  }
+  setLoading(false);
+};
 
   return (
     <div
