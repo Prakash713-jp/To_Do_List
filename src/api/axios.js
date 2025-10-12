@@ -1,9 +1,11 @@
+// src/api.js
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "https://your-backend-api-rlbv.onrender.com/api", // ✅ updated
+  baseURL: import.meta.env.VITE_API_URL, // ✅ Use Vite env variable
 });
 
+// Automatically attach token from localStorage
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
