@@ -8,7 +8,9 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  
   const API_URL = process.env.REACT_APP_API_URL;
+  console.log("API_URL:", API_URL);
 
 
   // ✅ Load auth data from localStorage on mount
