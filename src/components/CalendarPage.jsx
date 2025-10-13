@@ -7,6 +7,8 @@ import axios from "axios";
 import { Badge, OverlayTrigger, Tooltip } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import { FaArrowLeft } from "react-icons/fa";
+import bgImage from '../assets/tt.jpg';
+
 
 const categories = [
   "All", "Work", "Personal", "Study", "Shopping", "Health",
@@ -74,13 +76,13 @@ const CalendarPage = () => {
 
   return (
     <div
-      className="container-fluid py-5"
-      style={{
-         backgroundImage: `url('/tt.jpg')`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundAttachment: "fixed",
-        minHeight: "100vh",
+     className="container-fluid py-5 login-bg"
+  style={{
+    backgroundImage: `url(${bgImage})`,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundAttachment: "fixed",
+    minHeight: "100vh",
       }}
     >
   <style>{`
