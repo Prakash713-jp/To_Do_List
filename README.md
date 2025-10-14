@@ -87,7 +87,7 @@ task-karo/
 ![Graph](screenshot/Graph.png)
 
 **Streak**
-![Streak](screenshot/Streaks.png)
+![Streak](screenshot/streaks.png)
 
 
 
