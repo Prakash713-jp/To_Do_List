@@ -16,7 +16,7 @@ const Navbar = () => {
       <div className="container-fluid d-flex justify-content-between align-items-center">
         {/* Brand on far left */}
     {/* Brand slightly from left */}
-<span className="navbar-brand d-flex align-items-center fw-bold fs-4 text-white ms-5">
+<span className="navbar-brand d-flex align-items-center fw-bold fs-4 text-white ms-3">
   <FaHive className="me-2 text-warning" size={24} />
   Task Karo
 </span>
