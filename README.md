@@ -2,7 +2,7 @@
 
 **Task Karo** is a minimal, fast, and feature-rich **MERN stack** to-do list application that helps users efficiently manage their daily tasks. Organize tasks with categories, priorities, and status tracking to boost your productivity.  [MERN]Stack.....
 
-🔗 **Live Demo:** [https://your-live-demo-link.com](https://your-live-demo-link.com)  
+🔗 **Live Demo:** [https://prakash713-jp.github.io/To_Do_List/](https://prakash713-jp.github.io/To_Do_List/)  
 
 ---
 
