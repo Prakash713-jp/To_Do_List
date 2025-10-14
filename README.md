@@ -32,10 +32,13 @@
 
 ---
 
+
+
 ## 📂 Folder Structure
 
 This project follows a standard Monorepo structure, separating the WEB (Frontend) and SERVER (Backend) into distinct folders.
 
+```bash
 task-karo/
 ├── server/                             # Node.js / Express Backend
 │   ├── src/
@@ -64,8 +67,7 @@ task-karo/
 │   └── vite.config.js
 │
 ├── .gitignore
-└── README.md                           # This file
-
+└── README.md
 
 
 
@@ -84,7 +86,7 @@ task-karo/
 ![Graph](screenshot/Graph.png)
 
 **Streak**
-![Streak](screenshot/Streak.png)
+![Streak](screenshot/Streaks.png)
 
 
 
