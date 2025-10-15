@@ -9,6 +9,9 @@ export const AuthProvider = ({ children }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   
+  // 🚨 NEW STATE FOR HISTORY 🚨
+  const [history, setHistory] = useState([]);
+  
   const API_URL = import.meta.env.VITE_API_URL;
 
   // Debug: Log API URL on mount
@@ -46,6 +49,8 @@ export const AuthProvider = ({ children }) => {
     if (token) {
       console.log("🔑 Token found, fetching tasks...");
       fetchTasks();
+      // 🚨 NEW: Fetch history when token is available
+      fetchHistory(); 
     }
   }, [token]);
 
@@ -64,6 +69,61 @@ export const AuthProvider = ({ children }) => {
       console.error("Message:", err.response?.data?.message || err.message);
     }
   };
+  
+  // ----------------------------------------------------
+  // 🚨 NEW HISTORY FUNCTIONS 🚨
+  // ----------------------------------------------------
+
+  // POST - Record a history action (completed or deleted)
+  const recordHistoryAction = async (taskDetails, actionType) => {
+    try {
+      const historyRecord = {
+        taskId: taskDetails._id,
+        title: taskDetails.title,
+        description: taskDetails.description,
+        action: actionType, // "COMPLETED" or "DELETED"
+        timestamp: new Date().toISOString(),
+      };
+
+      console.log(`📡 POST ${API_URL}/history (${actionType})`);
+      const res = await axios.post(`${API_URL}/history`, historyRecord, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      console.log("✅ History record added successfully");
+      
+      // Update local history state
+      setHistory((prev) => [res.data, ...prev]);
+      
+      return res.data;
+    } catch (err) {
+      console.error(`❌ Failed to record history (${actionType})`);
+      console.error("Status:", err.response?.status);
+      console.error("Message:", err.response?.data?.message || err.message);
+      // Do not throw an error here, as the task operation should continue
+    }
+  };
+
+  // GET - Fetch all history records
+  const fetchHistory = async () => {
+    try {
+      console.log(`📡 GET ${API_URL}/history`);
+      const res = await axios.get(`${API_URL}/history`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      console.log(`✅ History fetched: ${res.data.length} records`);
+      setHistory(res.data);
+      return res.data; // Return data for immediate use if needed
+    } catch (err) {
+      console.error("❌ Failed to fetch history");
+      console.error("Status:", err.response?.status);
+      console.error("Message:", err.response?.data?.message || err.message);
+      return [];
+    }
+  };
+
+  // ----------------------------------------------------
+  // END HISTORY FUNCTIONS
+  // ----------------------------------------------------
 
   // POST - Add new task
   const addTask = async (taskData) => {
@@ -135,6 +195,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setToken(null);
     setTasks([]);
+    setHistory([]); // Clear history on logout
     localStorage.clear();
   };
 
@@ -144,6 +205,7 @@ export const AuthProvider = ({ children }) => {
         user,
         token,
         tasks,
+        history, // 👈 EXPOSE HISTORY STATE
         loading,
         login,
         logout,
@@ -151,6 +213,8 @@ export const AuthProvider = ({ children }) => {
         addTask,
         updateTask,
         deleteTask,
+        recordHistoryAction, // 👈 EXPOSE NEW FUNCTION
+        fetchHistory, // 👈 EXPOSE NEW FUNCTION
       }}
     >
       {children}

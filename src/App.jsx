@@ -17,11 +17,12 @@ import ResetPassword from "./pages/ResetPassword";
 import TaskList from "./components/TaskList";
 import TaskForm from "./components/TaskForm";
 import CalendarPage from "./components/CalendarPage";
+import HistoryPage from "./pages/HistoryPage"; // Imported
+import Sudoku from "./pages/Sudoku"; // Imported
 
 import { AuthProvider, AuthContext } from "./context/AuthContext";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import Sudoku from "./pages/Sudoku";
 
 // ✅ PUBLIC ROUTES
 const publicPaths = ["/login", "/register", "/reset-request", "/reset"];
@@ -111,6 +112,24 @@ const AppContent = () => {
           element={
             <ProtectedRoute>
               <CalendarPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* 🚨 FIX: Added the missing /history route 🚨 */}
+        <Route
+          path="/history"
+          element={
+            <ProtectedRoute>
+              <HistoryPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* Added the missing /sudoku route */}
+        <Route
+          path="/sudoku"
+          element={
+            <ProtectedRoute>
+              <Sudoku />
             </ProtectedRoute>
           }
         />
