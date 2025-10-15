@@ -1,7 +1,9 @@
 // src/pages/HistoryPage.jsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect, useContext } from "react";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+// import api from "../api/axios.js"; // ❌ REMOVE DIRECT AXIOS IMPORT (Already commented out)
+import { AuthContext } from "../context/AuthContext"; // ✅ IMPORT AUTH CONTEXT
 import {
     FaFileExcel,
     FaHistory,
@@ -12,12 +14,15 @@ import {
     FaCalendarAlt,
     FaSortAlphaDown,
     FaSortAlphaUp,
+    FaTrash, // Used for single delete button
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
-// Assuming you have a standard Bootstrap setup for styling
 
-// --- Utility Function: Excel Export ---
+// --- Configuration ---
+const TASKS_PER_PAGE = 15; // Pagination setting
+
+// --- Utility Function: Excel Export (UNCHANGED) ---
 const exportToExcel = (data, fileName) => {
     if (data.length === 0) {
         toast.warning("No tasks to download.", {
@@ -28,7 +33,7 @@ const exportToExcel = (data, fileName) => {
     }
 
     const dataForExport = data.map((task) => ({
-        ID: task._id || "N/A",
+        ID: task.originalTaskId || task._id || "N/A",
         Title: task.title,
         Description: task.description || "No description",
         Category: task.category || "N/A",
@@ -37,12 +42,8 @@ const exportToExcel = (data, fileName) => {
             ? "Deleted"
             : task.completed
             ? "Completed"
-            : "Pending",
-        "Created Date/Time": new Date(task.createdAt).toLocaleString(),
-        "Deadline Date/Time": task.deadline
-            ? new Date(task.deadline).toLocaleString()
-            : "N/A",
-        // Uses the historyTimestamp calculated in the useMemo hook
+            : "Pending/Updated", // Updated status label for clarity
+        "Action Logged At": new Date(task.createdAt).toLocaleString(),
         "Last Action Date/Time": task.historyTimestamp
             ? new Date(task.historyTimestamp).toLocaleString()
             : "N/A",
@@ -59,7 +60,7 @@ const exportToExcel = (data, fileName) => {
     toast.success("Download complete!", { autoClose: 3000, theme: "colored" });
 };
 
-// --- History Timestamp Formatter ---
+// --- History Timestamp Formatter (UNCHANGED) ---
 const formatHistoryTimestamp = (dateString) => {
     if (!dateString) return "N/A";
     const date = new Date(dateString);
@@ -77,41 +78,107 @@ const formatHistoryTimestamp = (dateString) => {
 };
 
 // --- Main Component: HistoryPage ---
-const HistoryPage = ({ tasks = [], deletedTasks = [], NavbarComponent }) => {
+const HistoryPage = ({ NavbarComponent }) => {
     const navigate = useNavigate();
-    const [sortBy, setSortBy] = useState("timestamp"); // 'timestamp' or 'title'
-    const [sortOrder, setSortOrder] = useState("desc"); // 'asc' or 'desc'
+    // ✅ Use context to get state and functions
+    const { history, fetchHistory, deleteHistoryRecord } = useContext(AuthContext);
 
-    // Combine and sort all tasks (Memoized for performance)
-    const allHistoryTasks = useMemo(() => {
-        // Active tasks (completed or pending) - Use updatedAt or createdAt for history
-        const activeHistory = tasks.map((t) => ({
-            ...t,
-            isDeleted: false,
-            // Prioritize updatedAt as 'last action', fall back to createdAt
-            historyTimestamp: t.updatedAt || t.createdAt,
-        }));
+    // 1. STATE FOR PAGINATION/UI
+    const [historyData, setHistoryData] = useState([]); // Use local state for filtered/sorted/paginated view
+    const [loading, setLoading] = useState(true);
+    const [sortBy, setSortBy] = useState("timestamp");
+    const [sortOrder, setSortOrder] = useState("desc");
+    const [currentPage, setCurrentPage] = useState(1); // Current Page
 
-        // Deleted tasks - Use deletedAt or fallback to updatedAt/createdAt
-        const deletedHistory = deletedTasks.map((t) => ({
-            ...t,
-            isDeleted: true,
-            // Prioritize deletedAt, fall back to updatedAt, then createdAt
-            historyTimestamp: t.deletedAt || t.updatedAt || t.createdAt,
-        }));
+    // 2. DATA FETCHING & SYNC EFFECT
+    // Fetch on mount, and re-run to update local state when context history changes
+    useEffect(() => {
+        // Only fetch if history is empty (e.g., initial load after login)
+        // Otherwise, trust the `history` state from AuthContext
+        if (history.length === 0 && loading) { // Added '&& loading' to prevent unnecessary fetches if component re-renders
+            const loadData = async () => {
+                await fetchHistory();
+                // Set loading to false is handled below in the sync effect once history is populated.
+                // We'll trust the sync effect to handle the final state update.
+            };
+            loadData();
+        } else if (history.length > 0) {
+            // When history is available (either from fetch or already in context), sync it.
+            setHistoryData(history);
+            setLoading(false);
+        }
+        // No dependency on 'loading' here to avoid loop, it's just to guard the initial fetch.
+    }, [fetchHistory, history.length]); // Dependency on fetchHistory from context, and history.length for initial fetch check
 
-        let combined = [...activeHistory, ...deletedHistory];
+    // Sync local historyData state with context history state (handles sorting/filtering/pagination)
+    useEffect(() => {
+        setHistoryData(history);
+        setLoading(false); // Explicitly stop loading after history is set
 
-        // Sorting Logic
+        // Reset to page 1 if the history size decreases significantly
+        const newTotalPages = Math.ceil(history.length / TASKS_PER_PAGE);
+        if (currentPage > newTotalPages && newTotalPages > 0) {
+            setCurrentPage(newTotalPages);
+        } else if (history.length === 0) {
+            setCurrentPage(1);
+        }
+    }, [history]); // Dependency on context history
+
+    // 3. HISTORY RECORD DELETION LOGIC
+    const handleDeleteRecord = async (recordId) => {
+        if (!window.confirm("⚠️ Are you sure you want to permanently delete this history record? This cannot be undone and will remove the record from your history log.")) {
+            return;
+        }
+
+        try {
+            // ✅ Use the context function to delete the record
+            await deleteHistoryRecord(recordId); 
+            
+            // The AuthContext automatically updates the global `history` state,
+            // which triggers the useEffect above to update local `historyData` and handle pagination.
+            
+            toast.success("🗑️ History record deleted successfully!", { autoClose: 3000, theme: "colored" });
+        } catch (error) {
+            console.error("Error deleting history record:", error);
+            toast.error("❌ Failed to delete history record. Please try again.", { autoClose: 3000, theme: "colored" });
+        }
+    };
+
+
+    // 4. COMBINE and SORT TASKS (Memoized)
+    const sortedHistoryTasks = useMemo(() => {
+        let combined = historyData.map((t) => {
+            // Ensure compatibility with the new taskSnapshot structure from the backend
+            const taskDetails = t.taskSnapshot || {}; 
+
+            return {
+                ...t,
+                originalTaskId: taskDetails._id || t.taskId,
+                title: taskDetails.title || t.title || "No Title",
+                description: taskDetails.description || t.description || "",
+                category: taskDetails.category || t.category || "N/A",
+                priority: taskDetails.priority || t.priority || "N/A",
+                // Use the originalCreatedAt from the snapshot if available, otherwise fallback
+                createdAt: taskDetails.originalCreatedAt || t.createdAt, 
+                // Determine action status based on the `action` field or specific timestamps
+                isDeleted: t.action === 'DELETED',
+                completed: t.action === 'COMPLETED',
+                // Determine the most relevant timestamp for sorting/display
+                // Prioritize action-specific timestamps, then the context record's createdAt timestamp
+                historyTimestamp: t.deletedAt || t.completedAt || t.updatedAt || t.createdAt,
+            };
+        });
+
         combined.sort((a, b) => {
             let comparison = 0;
             if (sortBy === "timestamp") {
-                const dateA = new Date(a.historyTimestamp);
-                const dateB = new Date(b.historyTimestamp);
+                // Ensure valid dates for comparison
+                const dateA = new Date(a.historyTimestamp || 0);
+                const dateB = new Date(b.historyTimestamp || 0);
                 comparison = dateA - dateB;
             } else if (sortBy === "title") {
-                const titleA = a.title.toUpperCase();
-                const titleB = b.title.toUpperCase();
+                const titleA = a.title?.toUpperCase() || "";
+                const titleB = b.title?.toUpperCase() || "";
                 if (titleA > titleB) comparison = 1;
                 else if (titleA < titleB) comparison = -1;
             }
@@ -120,9 +187,24 @@ const HistoryPage = ({ tasks = [], deletedTasks = [], NavbarComponent }) => {
         });
 
         return combined;
-    }, [tasks, deletedTasks, sortBy, sortOrder]);
+    }, [historyData, sortBy, sortOrder]); // Depend on local state
+
+    // 5. PAGINATION CALCULATIONS
+    const totalPages = Math.ceil(sortedHistoryTasks.length / TASKS_PER_PAGE);
+    const indexOfLastTask = currentPage * TASKS_PER_PAGE;
+    const indexOfFirstTask = indexOfLastTask - TASKS_PER_PAGE;
+    // Slice the sorted array to get tasks for the current page
+    const currentTasks = sortedHistoryTasks.slice(indexOfFirstTask, indexOfLastTask);
+
+    const handlePageChange = (pageNumber) => {
+        if (pageNumber >= 1 && pageNumber <= totalPages) {
+            setCurrentPage(pageNumber);
+            window.scrollTo({ top: 0, behavior: 'smooth' }); // Optional: Scroll to top on page change
+        }
+    };
 
     const handleSortChange = (newSortBy) => {
+        setCurrentPage(1); // Reset page on sort change
         if (sortBy === newSortBy) {
             setSortOrder(sortOrder === "asc" ? "desc" : "asc");
         } else {
@@ -136,11 +218,21 @@ const HistoryPage = ({ tasks = [], deletedTasks = [], NavbarComponent }) => {
         return sortOrder === "asc" ? <FaSortAlphaUp size={12} className="ms-1" /> : <FaSortAlphaDown size={12} className="ms-1" />;
     };
 
-    return (
-        // Use a container fluid for full width responsiveness
-        <div className="container-fluid py-4" style={{ minHeight: "100vh" }}>
-            {/* The Navbar will likely be a separate component rendered above this content in App.jsx */}
+    // Show loading spinner
+    if (loading) {
+        return (
+            <div className="container-fluid py-5 text-center" style={{ minHeight: "100vh" }}>
+                <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                </div>
+                <p className="mt-3 text-muted">Loading task history...</p>
+            </div>
+        );
+    }
 
+    // 6. RENDER LOGIC
+    return (
+        <div className="container-fluid py-4" style={{ minHeight: "100vh" }}>
             <div className="row justify-content-center">
                 <div className="col-12 col-lg-10">
                     <div className="card shadow-lg border-0" style={{ borderRadius: "1rem" }}>
@@ -165,24 +257,28 @@ const HistoryPage = ({ tasks = [], deletedTasks = [], NavbarComponent }) => {
                                 <button
                                     className="btn btn-sm btn-success d-flex align-items-center gap-1 fw-bold"
                                     onClick={() =>
-                                        exportToExcel(allHistoryTasks, "Full_Task_History")
+                                        exportToExcel(sortedHistoryTasks, "Full_Task_History")
                                     }
-                                    disabled={allHistoryTasks.length === 0}
+                                    disabled={sortedHistoryTasks.length === 0}
                                     aria-label="Download History"
                                 >
-                                    <FaFileExcel size={16} /> Download All ({allHistoryTasks.length})
+                                    <FaFileExcel size={16} /> Download All ({sortedHistoryTasks.length})
                                 </button>
                             </div>
                         </div>
 
                         <div className="card-body p-0">
-                            {allHistoryTasks.length === 0 ? (
+                            {currentTasks.length === 0 && sortedHistoryTasks.length === 0 ? (
                                 <p className="text-center text-muted p-5">
                                     No task history found. Start creating or deleting tasks!
                                 </p>
+                            ) : currentTasks.length === 0 ? (
+                                <p className="text-center text-muted p-5">
+                                    No tasks found on this page. Try navigating to page 1.
+                                </p>
                             ) : (
                                 <ul className="list-group list-group-flush">
-                                    {allHistoryTasks.map((task) => {
+                                    {currentTasks.map((task) => {
                                         const actionTimeFormatted = formatHistoryTimestamp(
                                             task.historyTimestamp
                                         );
@@ -192,38 +288,33 @@ const HistoryPage = ({ tasks = [], deletedTasks = [], NavbarComponent }) => {
                                         if (task.isDeleted) {
                                             statusBadge = (<><FaRegTrashAlt size={12} className="me-1" /> Deleted</>);
                                             badgeClass = "bg-danger";
-                                            // The timestamp is now guaranteed to be deletedAt or equivalent
-                                            timeLabel = "Deleted At:"; 
+                                            timeLabel = "Deleted At:";
                                         } else if (task.completed) {
                                             statusBadge = (<><FaCheckCircle size={12} className="me-1" /> Completed</>);
                                             badgeClass = "bg-success";
                                             timeLabel = "Completed At:";
                                         } else {
-                                            statusBadge = (<><FaHourglassHalf size={12} className="me-1" /> Pending</>);
-                                            badgeClass = "bg-warning text-dark";
+                                            // Covers PENDING/UPDATED actions (e.g., CREATED, UPDATED)
+                                            statusBadge = (<><FaHourglassHalf size={12} className="me-1" /> Logged</>);
+                                            badgeClass = "bg-info text-dark"; // Changed to info for general 'logged' action
                                             timeLabel = "Last Action:";
                                         }
 
                                         return (
                                             <li
-                                                key={task._id + (task.isDeleted ? "-del" : "-active")}
-                                                className={`list-group-item d-flex flex-column py-3 ${task.isDeleted ? "bg-light" : ""}`}
+                                                key={task._id}
+                                                id={task._id}
+                                                className={`list-group-item d-flex flex-column flex-md-row justify-content-between align-items-start py-3 ${task.isDeleted ? "bg-light" : ""}`}
                                                 style={{
                                                     borderLeft: task.isDeleted
                                                         ? "5px solid #dc3545"
-                                                        : task.completed ? "5px solid #198754" : "5px solid #ffc107",
-                                                    cursor: task.isDeleted ? "pointer" : "default",
-                                                }}
-                                                // Optional: Navigate to a detailed deleted task view if needed
-                                                onClick={() => {
-                                                    if (task.isDeleted) {
-                                                        // Example navigation - adjust this route as needed
-                                                        // navigate(`/deleted-task-detail/${task._id}`); 
-                                                        toast.info("Showing deleted task details is not implemented in this demo.", { autoClose: 3000, theme: "colored" });
-                                                    }
+                                                        : task.completed ? "5px solid #198754" : "5px solid #0dcaf0", // Changed border for Logged to match badge-info
+                                                    transition: 'background-color 0.3s',
                                                 }}
                                             >
-                                                <div className="d-flex flex-column flex-md-row justify-content-between align-items-start">
+                                                <div className="d-flex flex-column flex-md-row align-items-start w-100">
+
+                                                    {/* Task Details */}
                                                     <div className="flex-grow-1 me-md-3 mb-2 mb-md-0">
                                                         <h6 className={`mb-1 ${task.isDeleted ? "text-danger text-decoration-line-through" : "text-primary"}`}>
                                                             {task.title}
@@ -231,31 +322,46 @@ const HistoryPage = ({ tasks = [], deletedTasks = [], NavbarComponent }) => {
                                                         <p className="text-muted small mb-1">
                                                             {task.description || "No description provided."}
                                                         </p>
+
+                                                        {/* Metadata */}
+                                                        <div className="mt-2 small text-muted d-flex flex-wrap gap-3">
+                                                            <span>
+                                                                Category: <strong className="text-dark">{task.category || "N/A"}</strong>
+                                                            </span>
+                                                            <span>
+                                                                Priority: <strong className="text-dark">{task.priority || "N/A"}</strong>
+                                                            </span>
+                                                            <span>
+                                                                <FaCalendarAlt size={10} className="me-1" /> Created:{" "}
+                                                                <strong className="text-dark">
+                                                                    {new Date(task.createdAt).toLocaleDateString()}
+                                                                </strong>
+                                                            </span>
+                                                        </div>
                                                     </div>
 
-                                                    <div className="text-md-end text-start" style={{ minWidth: "180px" }}>
+                                                    {/* Status, Time, and Delete Button */}
+                                                    <div className="d-flex flex-column flex-sm-row flex-md-column align-items-start align-items-sm-center align-items-md-end gap-2 text-md-end text-start" style={{ minWidth: "180px" }}>
                                                         <span className={`badge ${badgeClass} mb-1 d-inline-flex align-items-center`}>
                                                             {statusBadge}
                                                         </span>
                                                         <small className="text-secondary d-flex align-items-center justify-content-md-end justify-content-start gap-1 fw-bold">
                                                             <FaClock size={12} /> {timeLabel} {actionTimeFormatted}
                                                         </small>
-                                                    </div>
-                                                </div>
 
-                                                <div className="mt-2 small text-muted d-flex flex-wrap gap-3">
-                                                    <span>
-                                                        Category: <strong className="text-dark">{task.category || "N/A"}</strong>
-                                                    </span>
-                                                    <span>
-                                                        Priority: <strong className="text-dark">{task.priority || "N/A"}</strong>
-                                                    </span>
-                                                    <span>
-                                                        <FaCalendarAlt size={10} className="me-1" /> Created:{" "}
-                                                        <strong className="text-dark">
-                                                            {new Date(task.createdAt).toLocaleDateString()}
-                                                        </strong>
-                                                    </span>
+                                                        {/* DELETE HISTORY RECORD BUTTON */}
+                                                        <button
+                                                            className="btn btn-sm btn-outline-danger mt-1"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation(); // Prevent list-item click behavior
+                                                                handleDeleteRecord(task._id);
+                                                            }}
+                                                            aria-label={`Permanently delete history record for ${task.title}`}
+                                                            style={{ lineHeight: 1, padding: '0.25rem 0.5rem' }}
+                                                        >
+                                                            <FaTrash size={12} className="me-1" /> Delete Record
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </li>
                                         );
@@ -263,6 +369,60 @@ const HistoryPage = ({ tasks = [], deletedTasks = [], NavbarComponent }) => {
                                 </ul>
                             )}
                         </div>
+
+                        {/* PAGINATION CONTROLS */}
+                        {totalPages > 1 && (
+                            <div className="card-footer bg-white border-0 py-3">
+                                <nav>
+                                    <ul className="pagination justify-content-center flex-wrap">
+                                        {/* Previous Button */}
+                                        <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+                                            <button
+                                                className="page-link"
+                                                onClick={() => handlePageChange(currentPage - 1)}
+                                                disabled={currentPage === 1}
+                                                aria-label="Previous Page"
+                                            >
+                                                Previous
+                                            </button>
+                                        </li>
+
+                                        {/* Page Numbers - Basic Range Display (for brevity, showing all pages here) */}
+                                        {Array.from({ length: totalPages }, (_, index) => (
+                                            <li
+                                                key={index + 1}
+                                                className={`page-item ${
+                                                    currentPage === index + 1 ? "active" : ""
+                                                }`}
+                                            >
+                                                <button
+                                                    className="page-link"
+                                                    onClick={() => handlePageChange(index + 1)}
+                                                >
+                                                    {index + 1}
+                                                </button>
+                                            </li>
+                                        ))}
+
+                                        {/* Next Button */}
+                                        <li
+                                            className={`page-item ${
+                                                currentPage === totalPages ? "disabled" : ""
+                                            }`}
+                                        >
+                                            <button
+                                                className="page-link"
+                                                onClick={() => handlePageChange(currentPage + 1)}
+                                                disabled={currentPage === totalPages}
+                                                aria-label="Next Page"
+                                            >
+                                                Next
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </nav>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
